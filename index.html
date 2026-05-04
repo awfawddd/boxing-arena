@@ -14,6 +14,7 @@
             background: radial-gradient(circle, rgba(30, 50, 30, 0.95), rgba(0, 0, 0, 1));
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 500; color: white; transition: opacity 0.5s ease;
+            pointer-events: auto; /* Forza la cliccabilità dei menu */
         }
 
         .menu-title {
@@ -28,7 +29,9 @@
             background: rgba(255, 255, 255, 0.1); border: 2px solid #f1c40f;
             border-radius: 12px; cursor: pointer; transition: all 0.3s;
             text-align: center; backdrop-filter: blur(5px);
-            pointer-events: auto; /* Assicura che siano cliccabili */
+            pointer-events: auto; /* Fondamentale per il debug del clic */
+            position: relative;
+            z-index: 600;
         }
 
         .btn:hover { background: #f1c40f; color: #1a1a1a; transform: scale(1.05); }
@@ -37,21 +40,25 @@
             padding: 14px; margin-bottom: 12px; width: 280px; 
             background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(241, 196, 15, 0.5);
             border-radius: 8px; outline: none;
+            pointer-events: auto;
         }
 
         #room-list {
             width: 85%; max-width: 550px; max-height: 250px;
             overflow-y: auto; background: rgba(0,0,0,0.5); border-radius: 15px; padding: 15px; margin-bottom: 20px;
+            pointer-events: auto;
         }
 
         .room-item {
             display: flex; justify-content: space-between; align-items: center;
             padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;
+            pointer-events: auto;
         }
 
         #ui-overlay {
             position: absolute; top: 30px; left: 30px;
-            color: white; z-index: 100; display: none; pointer-events: none;
+            color: white; z-index: 100; display: none; 
+            pointer-events: none; /* Impedisce di bloccare il clic al centro dello schermo */
             background: rgba(0,0,0,0.6); padding: 20px; border-radius: 15px;
             border-left: 5px solid #f1c40f;
         }
@@ -74,7 +81,7 @@
             position: absolute; top: 20%; width: 100%; text-align: center;
             color: #f1c40f; font-size: 2.5rem; font-weight: bold;
             display: none; z-index: 150; text-shadow: 2px 2px 10px black;
-            pointer-events: none; /* Non deve bloccare i clic */
+            pointer-events: none; /* Debug: non blocca più il mirino o i clic */
         }
 
         #round-info {
@@ -152,11 +159,12 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
         import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 
+        // Caricamento configurazione Firebase
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'boxing-arena-v3';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'boxing-arena-final';
 
         let currentUser = null;
         let currentRoomId = null;
@@ -171,22 +179,33 @@
         let roundsWon = 0;
         let roundOver = false;
 
+        // Autenticazione Automatica
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Auth error:", e);
             }
         };
 
         onAuthStateChanged(auth, user => {
             currentUser = user;
-            if (user) document.getElementById('player-id-display').innerText = "ID: " + user.uid;
+            if (user) {
+                document.getElementById('player-id-display').innerText = "ID Giocatore: " + user.uid;
+                // Una volta loggati, carichiamo le stanze se siamo nel menu multiplayer
+                if (document.getElementById('multiplayer-menu').style.display === 'flex') {
+                    loadRooms();
+                }
+            }
         });
 
         initAuth();
 
-        // Funzione per mostrare i menu
+        // Funzione per mostrare i menu correttamente
         window.showMenu = (id) => {
             ['main-menu', 'multiplayer-menu', 'room-settings'].forEach(m => {
                 const el = document.getElementById(m);
@@ -198,7 +217,7 @@
         document.getElementById('btn-back-main').onclick = () => showMenu('main-menu');
         document.getElementById('btn-back-multi').onclick = () => showMenu('multiplayer-menu');
 
-        // --- Scena ---
+        // --- Configurazione Grafica (Three.js) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87ceeb);
         scene.fog = new THREE.Fog(0x87ceeb, 15, 60);
@@ -220,7 +239,7 @@
         scene.add(light);
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
-        // Mappa
+        // Creazione Mappa
         const grassGeo = new THREE.PlaneGeometry(100, 100);
         const grassMat = new THREE.MeshStandardMaterial({ color: 0x3d5a2d });
         const grass = new THREE.Mesh(grassGeo, grassMat);
@@ -250,18 +269,6 @@
             createTree(x, z);
         }
 
-        function createFence() {
-            const fenceMat = new THREE.MeshStandardMaterial({ color: 0x4e342e });
-            for(let i = -20; i <= 20; i += 2.5) {
-                const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.4, 0.2), fenceMat);
-                p1.position.set(i, 0.7, 20); scene.add(p1);
-                const p2 = p1.clone(); p2.position.z = -20; scene.add(p2);
-                const p3 = p1.clone(); p3.position.set(20, 0.7, i); scene.add(p3);
-                const p4 = p1.clone(); p4.position.set(-20, 0.7, i); scene.add(p4);
-            }
-        }
-        createFence();
-
         // Avatar
         function createAvatar(color = 0x2196F3) {
             const group = new THREE.Group();
@@ -280,11 +287,11 @@
         rightHand.position.set(0.4, -0.3, -0.5);
         camera.add(leftHand, rightHand);
 
-        // BOT
+        // BOT (Allenamento)
         function spawnBot() {
             if(bot && bot.mesh) scene.remove(bot.mesh);
-            let x = (Math.random() - 0.5) * 15;
-            let z = (Math.random() - 0.5) * 15;
+            let x = (Math.random() - 0.5) * 6;
+            let z = (Math.random() - 0.5) * 6;
             bot = { mesh: createAvatar(0xf44336), health: 100, lastAttack: 0, alive: true };
             bot.mesh.position.set(x, 0, z);
             scene.add(bot.mesh);
@@ -302,10 +309,15 @@
             } else if(Date.now() - bot.lastAttack > 1200) {
                 health -= 10;
                 bot.lastAttack = Date.now();
+                if(health <= 0) {
+                    health = 0;
+                    alert("Sei stato messo KO dal BOT!");
+                    location.reload();
+                }
             }
         }
 
-        // Multiplayer logic
+        // --- Logica Multiplayer ---
         function loadRooms() {
             if (!currentUser) return;
             const roomsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
@@ -320,7 +332,7 @@
                     item.onclick = (e) => { e.stopPropagation(); joinRoom(d.id, room.name); };
                     list.appendChild(item);
                 });
-            }, (err) => console.error(err));
+            });
         }
 
         async function joinRoom(id, name) {
@@ -369,6 +381,7 @@
             if(!currentUser || !currentRoomId) return;
             const playerDoc = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId, 'players', currentUser.uid);
             
+            // Aggiorna posizione
             setInterval(() => {
                 if(!gameStarted || !currentUser) return;
                 setDoc(playerDoc, {
@@ -379,6 +392,7 @@
                 }, { merge: true });
             }, 100);
 
+            // Ascolta cambiamenti stanza
             onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId), (snap) => {
                 const data = snap.data();
                 if(data && data.round !== currentRound) {
@@ -387,6 +401,7 @@
                 }
             });
 
+            // Ascolta altri giocatori
             onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId, 'players'), (snap) => {
                 let activePlayers = 0;
                 let survivorId = null;
@@ -405,16 +420,18 @@
                     if(data.health > 0) {
                         activePlayers++;
                         survivorId = d.id;
+                    } else {
+                        players[d.id].visible = false;
                     }
                 });
 
                 if(activePlayers === 1 && gameStarted && !roundOver) {
-                    checkRoundEnd(survivorId);
+                    checkRoundEnd();
                 }
-            }, (err) => console.error(err));
+            });
         }
 
-        async function checkRoundEnd(survivorId) {
+        async function checkRoundEnd() {
             roundOver = true;
             const msg = document.getElementById('game-msg');
             
@@ -434,7 +451,7 @@
                     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
                     updateDoc(roomRef, { round: currentRound + 1 });
                 } else {
-                    alert(`Match Terminato! Round vinti: ${roundsWon}`);
+                    alert(`Match Terminato! Vittorie: ${roundsWon}`);
                     location.reload();
                 }
             }, 3000);
@@ -452,6 +469,7 @@
             }
         }
 
+        // Input
         const keys = {};
         window.addEventListener('keydown', e => keys[e.code] = true);
         window.addEventListener('keyup', e => keys[e.code] = false);
@@ -486,10 +504,9 @@
                         bot.alive = false;
                         scene.remove(bot.mesh);
                         const msg = document.getElementById('game-msg');
-                        msg.innerText = "AVVERSARIO SCONFITTO!";
+                        msg.innerText = "BOT SCONFITTO!";
                         msg.style.display = 'block';
-                        setTimeout(() => { msg.style.display = 'none'; }, 2000);
-                        setTimeout(spawnBot, 1000);
+                        setTimeout(() => { msg.style.display = 'none'; spawnBot(); }, 1500);
                     }
                 }
             } else if(gameMode === 'multi' && !roundOver) {
@@ -508,6 +525,7 @@
 
         document.addEventListener('mousedown', () => punch());
 
+        // Loop di gioco
         function update() {
             requestAnimationFrame(update);
             if(!gameStarted) { renderer.render(scene, camera); return; }
@@ -522,6 +540,7 @@
                 if(keys['KeyA']) playerGroup.position.addScaledVector(side, -speed);
                 if(keys['KeyD']) playerGroup.position.addScaledVector(side, speed);
 
+                // Limiti ring
                 playerGroup.position.x = Math.max(-19.5, Math.min(19.5, playerGroup.position.x));
                 playerGroup.position.z = Math.max(-19.5, Math.min(19.5, playerGroup.position.z));
             }
