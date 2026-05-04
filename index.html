@@ -458,10 +458,24 @@
         });
 
         // Pugno: solo IN-GAME e con pointer lock attivo (evita click dei menu)
+        // Se siamo in gioco ma il lock e' stato rilasciato (ESC, alt-tab, ecc), il click lo riacquisisce.
         renderer.domElement.addEventListener('mousedown', () => {
-            if (gameStarted && document.pointerLockElement === renderer.domElement) {
+            if (!gameStarted) return;
+            if (document.pointerLockElement === renderer.domElement) {
                 punch();
+            } else {
+                // Riacquisisce il lock; il primo click NON conta come pugno
+                try {
+                    renderer.domElement.requestPointerLock();
+                } catch (e) {
+                    console.warn("requestPointerLock fallito:", e);
+                }
             }
+        });
+
+        // Logging utile in caso di problemi col lock
+        document.addEventListener('pointerlockerror', () => {
+            console.warn("Pointer lock errore - riprova tra 1-2 secondi (cooldown del browser).");
         });
 
         async function punch() {
