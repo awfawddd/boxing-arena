@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Boxing Arena - Torneo a Round</title>
+    <title>Boxing Arena - Online</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a2a1a; touch-action: none; }
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a2a1a; touch-action: none; }
         
-        /* Schermata di caricamento */
         #loading-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: #1a2a1a; color: #f1c40f; display: flex; flex-direction: column;
+            background: #1a1a1a; color: #f1c40f; display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 1000;
         }
 
         #main-menu, #multiplayer-menu, #room-settings {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, rgba(30, 50, 30, 0.95), rgba(0, 0, 0, 1));
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(30, 50, 30, 0.9), rgba(0, 0, 0, 1));
             display: none; flex-direction: column; justify-content: center; align-items: center;
             z-index: 500; color: white;
         }
 
         .menu-title {
-            font-size: 3rem; font-weight: 900; letter-spacing: 5px; margin-bottom: 30px;
+            font-size: 3rem; font-weight: 900; letter-spacing: 5px; margin-bottom: 20px;
             color: #f1c40f; text-shadow: 0 0 20px rgba(241, 196, 15, 0.5);
             text-align: center; text-transform: uppercase;
         }
@@ -33,19 +31,29 @@
             font-size: 1.1rem; font-weight: bold; color: white;
             background: rgba(255, 255, 255, 0.1); border: 2px solid #f1c40f;
             border-radius: 12px; cursor: pointer; transition: 0.3s;
-            text-align: center; pointer-events: auto; z-index: 600;
+            text-align: center; pointer-events: auto;
         }
 
-        .btn:hover { background: #f1c40f; color: #1a1a1a; }
+        .btn:hover { background: #f1c40f; color: #1a1a1a; transform: scale(1.05); }
 
-        #ui-overlay, #round-info {
-            position: absolute; color: white; z-index: 100; display: none; pointer-events: none;
+        #room-list {
+            width: 320px; max-height: 200px; overflow-y: auto;
+            background: rgba(0,0,0,0.5); border-radius: 10px; margin-bottom: 20px; padding: 10px;
         }
 
-        #ui-overlay { top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; }
-        #round-info { top: 20px; right: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; text-align: right; }
+        .room-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
 
-        .health-bar { width: 200px; height: 12px; background: #444; border-radius: 6px; overflow: hidden; }
+        #ui-overlay {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.7); padding: 15px; border-radius: 15px;
+            color: white; z-index: 100; display: none; pointer-events: none;
+            border-left: 5px solid #f1c40f;
+        }
+
+        .health-bar-bg { width: 180px; height: 12px; background: #333; border-radius: 6px; margin-top: 5px; overflow: hidden; }
         #health-fill { width: 100%; height: 100%; background: #2ecc71; transition: 0.3s; }
 
         #crosshair {
@@ -56,49 +64,45 @@
 
         #game-msg {
             position: absolute; top: 25%; width: 100%; text-align: center;
-            color: #f1c40f; font-size: 2rem; font-weight: bold; display: none; z-index: 150;
+            color: #f1c40f; font-size: 2rem; font-weight: bold; display: none;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.8); pointer-events: none; z-index: 200;
         }
     </style>
 </head>
 <body>
 
     <div id="loading-screen">
-        <h1 style="margin-bottom: 10px;">BOXING ARENA</h1>
-        <p id="loading-text">Caricamento asset 3D...</p>
+        <h1>BOXING ARENA</h1>
+        <p id="loading-text">Connessione ai server...</p>
     </div>
 
     <div id="game-msg"></div>
 
     <div id="ui-overlay">
         <h3 id="room-display" style="margin:0; color:#f1c40f;">ARENA</h3>
-        <div style="font-size: 0.8rem; margin: 5px 0;">SALUTE:</div>
-        <div class="health-bar"><div id="health-fill"></div></div>
+        <div style="font-size: 0.8rem; margin-top:5px;">LA TUA SALUTE:</div>
+        <div class="health-bar-bg"><div id="health-fill"></div></div>
         <button class="btn" style="width:100px; padding:5px; font-size:0.7rem; margin-top:10px; pointer-events:auto;" onclick="location.reload()">ESCI</button>
-    </div>
-
-    <div id="round-info">
-        <div id="current-round-text" style="color:#f1c40f;">ROUND 1/3</div>
-        <div id="score-text">Vinti: 0</div>
     </div>
 
     <div id="main-menu">
         <h1 class="menu-title">Boxing Arena</h1>
         <button class="btn" onclick="startSingle()">Allenamento (BOT)</button>
-        <button class="btn" onclick="showMenu('multiplayer-menu')">Sfida Online</button>
+        <button class="btn" onclick="openMultiplayer()">Sfida Online (PvP)</button>
     </div>
 
     <div id="multiplayer-menu">
-        <h2 class="menu-title">Lobby</h2>
-        <div id="room-list" style="width: 300px; max-height: 200px; overflow-y: auto; margin-bottom: 20px;"></div>
-        <button class="btn" onclick="showMenu('room-settings')">Crea Stanza</button>
-        <button class="btn" onclick="showMenu('main-menu')">Indietro</button>
+        <h2 class="menu-title">Lobby Online</h2>
+        <div id="room-list">Caricamento arene...</div>
+        <button class="btn" onclick="showMenu('room-settings')">Crea Nuova Arena</button>
+        <button class="btn" style="border-color:#e74c3c" onclick="showMenu('main-menu')">Indietro</button>
     </div>
 
     <div id="room-settings">
-        <h2 class="menu-title">Nuova Sfida</h2>
-        <input type="text" id="room-name-input" placeholder="Nome Stanza" style="padding:10px; margin-bottom:10px; width:260px; border-radius:8px; border:none;">
-        <button class="btn" onclick="createRoom()">Inizia</button>
-        <button class="btn" onclick="showMenu('multiplayer-menu')">Annulla</button>
+        <h2 class="menu-title">Configura Arena</h2>
+        <input type="text" id="room-name-input" placeholder="Nome dell'arena..." style="padding:15px; width:250px; border-radius:10px; border:none; margin-bottom:15px;">
+        <button class="btn" onclick="createNewRoom()">Crea ed Entra</button>
+        <button class="btn" style="border-color:#e74c3c" onclick="showMenu('multiplayer-menu')">Annulla</button>
     </div>
 
     <div id="crosshair"></div>
@@ -118,118 +122,439 @@
         import * as THREE from 'three';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, onSnapshot, updateDoc, addDoc } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 
-        // Configurazione
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'boxing-arena-v3';
-
-        let user = null;
-        let health = 100;
-        let gameStarted = false;
-        let gameMode = 'single'; // 'single' o 'multi'
-
-        // --- INIZIALIZZAZIONE ---
-        window.onload = async () => {
-            document.getElementById('loading-text').innerText = "Connessione al server...";
-            try {
-                await signInAnonymously(auth);
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('main-menu').style.display = 'flex';
-            } catch (e) {
-                document.getElementById('loading-text').innerText = "Errore di connessione. Riprova.";
-                console.error(e);
-            }
+        // =====================================================================
+        //  FIREBASE CONFIG — INCOLLA QUI il config del TUO progetto Firebase.
+        //  Lo trovi su: https://console.firebase.google.com
+        //  -> Impostazioni progetto -> "Generale" -> "Le tue app" -> Web app
+        // =====================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyD4VQj3fYmdD-9IQ7MfIBSQYSe9W24A5ys",
+            authDomain: "boxing-arena-cffe6.firebaseapp.com",
+            projectId: "boxing-arena-cffe6",
+            storageBucket: "boxing-arena-cffe6.firebasestorage.app",
+            messagingSenderId: "1075025127986",
+            appId: "1:1075025127986:web:53a907567b1ebf9de2ea2b"
         };
 
-        onAuthStateChanged(auth, u => { user = u; });
+        // Prefisso per i dati di QUESTO gioco (utile se vuoi riusare lo stesso progetto Firebase per piu' giochi)
+        const APP_ID = 'boxing-arena';
+
+        // Controllo se il config e' stato compilato
+        const configOk = !Object.values(firebaseConfig).some(v => v === "INCOLLA_QUI");
+
+        let app, auth, db;
+        if (configOk) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } else {
+            console.warn("Firebase non configurato. Solo Allenamento disponibile.");
+        }
+
+        let currentUser = null;
+        let currentRoomId = null;
+        let remotePlayers = {};   // id -> THREE.Group
+        let remoteState = {};     // id -> { health, lastSeen }
+        let gameMode = 'single';
+
+        // Riferimenti per cleanup
+        let positionInterval = null;
+        let unsubRooms = null;
+        let unsubPlayers = null;
+
+        // --- STATO GIOCO ---
+        let gameStarted = false;
+        let health = 100;
+        let isPunching = false;
+        let bot = { mesh: null, health: 100, alive: false, lastAttack: 0 };
+
+        // --- SCENA E CAMERA ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 10, 60);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const playerGroup = new THREE.Group();
+        playerGroup.add(camera);
+        playerGroup.position.set(0, 1.7, 10);
+        scene.add(playerGroup);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(5, 15, 5);
+        sun.castShadow = true;
+        scene.add(sun);
+
+        const grass = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x3d5a2d }));
+        grass.rotation.x = -Math.PI / 2;
+        grass.receiveShadow = true;
+        scene.add(grass);
+
+        const ring = new THREE.Mesh(new THREE.BoxGeometry(10, 0.4, 10), new THREE.MeshStandardMaterial({ color: 0xcc0000 }));
+        ring.position.y = 0.2;
+        scene.add(ring);
+
+        function createTree(x, z) {
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 2), new THREE.MeshStandardMaterial({ color: 0x5d4037 }));
+            trunk.position.y = 1;
+            const top = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 8), new THREE.MeshStandardMaterial({ color: 0x2e7d32 }));
+            top.position.y = 2.5;
+            tree.add(trunk, top);
+            tree.position.set(x, 0, z);
+            scene.add(tree);
+        }
+        for (let i = 0; i < 40; i++) {
+            const rx = (Math.random() - 0.5) * 80;
+            const rz = (Math.random() - 0.5) * 80;
+            if (Math.abs(rx) > 7 || Math.abs(rz) > 7) createTree(rx, rz);
+        }
+
+        function createAvatar(color = 0x2196f3) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1), new THREE.MeshStandardMaterial({ color }));
+            body.position.y = 0.85;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.25), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
+            head.position.y = 1.6;
+            group.add(body, head);
+            return group;
+        }
+
+        const handMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+        const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.3), handMat);
+        const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.3), handMat);
+        leftHand.position.set(-0.4, -0.4, -0.6);
+        rightHand.position.set(0.4, -0.4, -0.6);
+        camera.add(leftHand, rightHand);
+
+        // --- AUTENTICAZIONE ---
+        async function initAuth() {
+            if (!configOk) {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('main-menu').style.display = 'flex';
+                return;
+            }
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                console.error("Errore Autenticazione", e);
+                document.getElementById('loading-text').innerText =
+                    "Errore: abilita 'Anonymous sign-in' nella console Firebase.";
+            }
+        }
+
+        if (configOk) {
+            onAuthStateChanged(auth, u => {
+                currentUser = u;
+                if (u) {
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('main-menu').style.display = 'flex';
+                }
+            });
+        }
 
         // --- MENU ---
         window.showMenu = (id) => {
             ['main-menu', 'multiplayer-menu', 'room-settings'].forEach(m => {
                 document.getElementById(m).style.display = (m === id) ? 'flex' : 'none';
             });
-            if(id === 'multiplayer-menu') loadRooms();
         };
 
-        // --- GRAFICA ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+        window.openMultiplayer = () => {
+            if (!configOk) {
+                alert("Multiplayer non disponibile: Firebase non e' configurato.");
+                return;
+            }
+            if (!currentUser) return;
+            showMenu('multiplayer-menu');
+            loadRooms();
+        };
 
-        const playerGroup = new THREE.Group();
-        playerGroup.add(camera);
-        playerGroup.position.set(0, 1.7, 5);
-        scene.add(playerGroup);
+        // --- LOBBY ---
+        // Path: /games/{APP_ID}/rooms/{roomId} e /games/{APP_ID}/rooms/{roomId}/players/{uid}
+        function roomsCol()                  { return collection(db, 'games', APP_ID, 'rooms'); }
+        function roomDoc(roomId)             { return doc(db, 'games', APP_ID, 'rooms', roomId); }
+        function playersCol(roomId)          { return collection(db, 'games', APP_ID, 'rooms', roomId, 'players'); }
+        function playerDoc(roomId, uid)      { return doc(db, 'games', APP_ID, 'rooms', roomId, 'players', uid); }
 
-        // Luci e Pavimento
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 5);
-        scene.add(light);
+        function loadRooms() {
+            if (unsubRooms) unsubRooms();
+            unsubRooms = onSnapshot(roomsCol(), (snap) => {
+                const list = document.getElementById('room-list');
+                list.innerHTML = '';
+                if (snap.empty) {
+                    list.innerHTML = '<div style="opacity:0.5; text-align:center;">Nessuna arena attiva</div>';
+                    return;
+                }
+                snap.forEach(d => {
+                    const room = d.data();
+                    const item = document.createElement('div');
+                    item.className = 'room-item';
+                    const safeName = String(room.name || 'Arena').replace(/[<>"']/g, '');
+                    item.innerHTML = `<span>${safeName}</span>
+                        <button class="btn" style="width:80px; padding:5px; margin:0; font-size:0.8rem;"
+                                onclick="joinRoom('${d.id}', '${safeName.replace(/'/g, '')}')">ENTRA</button>`;
+                    list.appendChild(item);
+                });
+            }, (err) => console.error("Errore sincronizzazione stanze", err));
+        }
 
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshStandardMaterial({color: 0x3d5a2d}));
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        window.createNewRoom = async () => {
+            if (!currentUser) return;
+            const name = document.getElementById('room-name-input').value.trim() || "Arena PvP";
+            const roomId = crypto.randomUUID();
+            try {
+                await setDoc(roomDoc(roomId), {
+                    name,
+                    createdAt: serverTimestamp(),
+                    creatorId: currentUser.uid
+                });
+                joinRoom(roomId, name);
+            } catch (e) {
+                console.error("Errore creazione stanza", e);
+                alert("Impossibile creare la stanza. Controlla le Security Rules.");
+            }
+        };
 
-        const ring = new THREE.Mesh(new THREE.BoxGeometry(10, 0.2, 10), new THREE.MeshStandardMaterial({color: 0xcc0000}));
-        ring.position.y = 0.1;
-        scene.add(ring);
+        window.joinRoom = (id, name) => {
+            currentRoomId = id;
+            gameMode = 'multi';
+            startMatch(name);
+            startNetworkSync();
+        };
 
-        // --- LOGICA GIOCO ---
+        function startNetworkSync() {
+            if (!currentUser || !currentRoomId) return;
+            stopNetworkSync();
+
+            const me = playerDoc(currentRoomId, currentUser.uid);
+
+            // Scrittura periodica della mia posizione (10 Hz)
+            positionInterval = setInterval(async () => {
+                if (!gameStarted) return;
+                try {
+                    await setDoc(me, {
+                        pos: { x: playerGroup.position.x, y: playerGroup.position.y, z: playerGroup.position.z },
+                        rot: playerGroup.rotation.y,
+                        health,
+                        lastSeen: Date.now(),
+                        uid: currentUser.uid
+                    }, { merge: true });
+                } catch (e) {
+                    console.error("Errore invio posizione", e);
+                }
+            }, 100);
+
+            // Lettura degli altri giocatori
+            unsubPlayers = onSnapshot(playersCol(currentRoomId), (snap) => {
+                const seen = new Set();
+                snap.forEach(d => {
+                    seen.add(d.id);
+                    const data = d.data();
+                    if (d.id === currentUser.uid) {
+                        // Il server puo' aver abbassato la mia salute (mi ha colpito un altro)
+                        if (typeof data.health === 'number' && data.health < health) {
+                            health = data.health;
+                            if (health <= 0) gameOver("Sei stato sconfitto!");
+                        }
+                        return;
+                    }
+                    // Salta i giocatori "morti da troppo tempo" (ghost)
+                    if (data.lastSeen && Date.now() - data.lastSeen > 5000) {
+                        if (remotePlayers[d.id]) {
+                            scene.remove(remotePlayers[d.id]);
+                            delete remotePlayers[d.id];
+                            delete remoteState[d.id];
+                        }
+                        return;
+                    }
+                    if (!remotePlayers[d.id]) {
+                        remotePlayers[d.id] = createAvatar(0xf44336);
+                        scene.add(remotePlayers[d.id]);
+                    }
+                    if (data.pos) {
+                        remotePlayers[d.id].position.set(data.pos.x, 0, data.pos.z);
+                    }
+                    if (typeof data.rot === 'number') {
+                        remotePlayers[d.id].rotation.y = data.rot;
+                    }
+                    remoteState[d.id] = { health: data.health ?? 100, lastSeen: data.lastSeen };
+                    remotePlayers[d.id].visible = (data.health ?? 100) > 0;
+                });
+                // Rimuovi giocatori non piu' presenti nello snapshot
+                Object.keys(remotePlayers).forEach(id => {
+                    if (!seen.has(id)) {
+                        scene.remove(remotePlayers[id]);
+                        delete remotePlayers[id];
+                        delete remoteState[id];
+                    }
+                });
+            }, (err) => console.error("Errore sincronizzazione giocatori", err));
+        }
+
+        function stopNetworkSync() {
+            if (positionInterval) {
+                clearInterval(positionInterval);
+                positionInterval = null;
+            }
+            if (unsubPlayers) {
+                unsubPlayers();
+                unsubPlayers = null;
+            }
+        }
+
+        // Quando l'utente chiude/ricarica, rimuove il proprio doc giocatore
+        window.addEventListener('beforeunload', () => {
+            if (currentUser && currentRoomId) {
+                try { deleteDoc(playerDoc(currentRoomId, currentUser.uid)); } catch {}
+            }
+            stopNetworkSync();
+        });
+
+        // --- SINGLE PLAYER ---
         window.startSingle = () => {
             gameMode = 'single';
-            startGame("Allenamento");
+            startMatch("Allenamento");
+            spawnBot();
         };
 
-        window.createRoom = async () => {
-            const name = document.getElementById('room-name-input').value || "Arena";
-            gameMode = 'multi';
-            startGame(name);
-        };
+        function spawnBot() {
+            if (bot.mesh) scene.remove(bot.mesh);
+            bot.mesh = createAvatar(0xf44336);
+            bot.mesh.position.set(0, 0, 0);
+            bot.health = 100;
+            bot.alive = true;
+            scene.add(bot.mesh);
+        }
 
-        function startGame(title) {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('room-settings').style.display = 'none';
+        function startMatch(title) {
+            showMenu('none');
             document.getElementById('ui-overlay').style.display = 'block';
             document.getElementById('crosshair').style.display = 'block';
-            document.getElementById('room-display').innerText = title;
+            document.getElementById('room-display').innerText = title.toUpperCase();
+            health = 100;
             gameStarted = true;
             renderer.domElement.requestPointerLock();
         }
 
-        // Movimento
+        // --- INPUT ---
         const keys = {};
-        window.onkeydown = e => keys[e.code] = true;
-        window.onkeyup = e => keys[e.code] = false;
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup',   e => keys[e.code] = false);
 
         document.addEventListener('mousemove', e => {
-            if(document.pointerLockElement) {
+            if (document.pointerLockElement === renderer.domElement) {
                 playerGroup.rotation.y -= e.movementX * 0.002;
+                camera.rotation.x -= e.movementY * 0.002;
+                camera.rotation.x = Math.max(-1.4, Math.min(1.4, camera.rotation.x));
             }
         });
 
+        // Pugno: solo IN-GAME e con pointer lock attivo (evita click dei menu)
+        renderer.domElement.addEventListener('mousedown', () => {
+            if (gameStarted && document.pointerLockElement === renderer.domElement) {
+                punch();
+            }
+        });
+
+        async function punch() {
+            if (isPunching || !gameStarted || health <= 0) return;
+            isPunching = true;
+            const startZ = rightHand.position.z;
+            let t = 0;
+            const anim = () => {
+                t += 0.25;
+                rightHand.position.z = startZ - Math.sin(t * Math.PI) * 0.8;
+                if (t < 1) requestAnimationFrame(anim);
+                else { rightHand.position.z = startZ; isPunching = false; }
+            };
+            anim();
+
+            if (gameMode === 'single' && bot.alive) {
+                if (playerGroup.position.distanceTo(bot.mesh.position) < 2.5) {
+                    bot.health -= 20;
+                    if (bot.health <= 0) {
+                        bot.alive = false;
+                        scene.remove(bot.mesh);
+                        showMessage("BOT KO!");
+                        setTimeout(spawnBot, 2000);
+                    }
+                }
+            } else if (gameMode === 'multi' && currentUser && currentRoomId) {
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera({ x: 0, y: 0 }, camera);
+                for (const id of Object.keys(remotePlayers)) {
+                    const hits = ray.intersectObject(remotePlayers[id], true);
+                    if (hits.length > 0 && hits[0].distance < 2.5) {
+                        const targetHealth = (remoteState[id]?.health ?? 100) - 15;
+                        try {
+                            await updateDoc(playerDoc(currentRoomId, id), {
+                                health: Math.max(0, targetHealth)
+                            });
+                        } catch (e) {
+                            console.error("Errore colpo PvP", e);
+                        }
+                        break; // un colpo, un bersaglio
+                    }
+                }
+            }
+        }
+
+        function gameOver(msg) {
+            gameStarted = false;
+            stopNetworkSync();
+            try { document.exitPointerLock(); } catch {}
+            alert(msg);
+            location.reload();
+        }
+
+        function showMessage(txt) {
+            const m = document.getElementById('game-msg');
+            m.innerText = txt;
+            m.style.display = 'block';
+            setTimeout(() => m.style.display = 'none', 1500);
+        }
+
+        // --- LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-            if(!gameStarted) return;
+            if (gameStarted && health > 0) {
+                const speed = 0.12;
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(playerGroup.quaternion);
+                const side    = new THREE.Vector3(1, 0, 0).applyQuaternion(playerGroup.quaternion);
+                if (keys['KeyW']) playerGroup.position.addScaledVector(forward, speed);
+                if (keys['KeyS']) playerGroup.position.addScaledVector(forward, -speed);
+                if (keys['KeyA']) playerGroup.position.addScaledVector(side, -speed);
+                if (keys['KeyD']) playerGroup.position.addScaledVector(side, speed);
 
-            const speed = 0.1;
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(playerGroup.quaternion);
-            const side = new THREE.Vector3(1, 0, 0).applyQuaternion(playerGroup.quaternion);
+                playerGroup.position.x = Math.max(-48, Math.min(48, playerGroup.position.x));
+                playerGroup.position.z = Math.max(-48, Math.min(48, playerGroup.position.z));
 
-            if(keys['KeyW']) playerGroup.position.addScaledVector(forward, speed);
-            if(keys['KeyS']) playerGroup.position.addScaledVector(forward, -speed);
-            if(keys['KeyA']) playerGroup.position.addScaledVector(side, -speed);
-            if(keys['KeyD']) playerGroup.position.addScaledVector(side, speed);
-
+                if (gameMode === 'single' && bot.alive) {
+                    const dist = playerGroup.position.distanceTo(bot.mesh.position);
+                    if (dist > 1.3) {
+                        const dir = new THREE.Vector3().subVectors(playerGroup.position, bot.mesh.position).normalize();
+                        bot.mesh.position.addScaledVector(dir, 0.04);
+                        bot.mesh.lookAt(playerGroup.position.x, 0, playerGroup.position.z);
+                    } else if (Date.now() - bot.lastAttack > 1500) {
+                        health -= 10;
+                        bot.lastAttack = Date.now();
+                        if (health <= 0) gameOver("BOT ti ha messo KO!");
+                    }
+                }
+                document.getElementById('health-fill').style.width = health + "%";
+            }
             renderer.render(scene, camera);
         }
+
+        initAuth();
         animate();
 
         window.onresize = () => {
@@ -237,12 +562,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         };
-
-        async function loadRooms() {
-            // Qui andrebbe la logica Firestore per caricare le stanze
-            console.log("Caricamento stanze...");
-        }
-
     </script>
 </body>
 </html>
