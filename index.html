@@ -67,6 +67,57 @@
             color: #f1c40f; font-size: 2rem; font-weight: bold; display: none;
             text-shadow: 2px 2px 10px rgba(0,0,0,0.8); pointer-events: none; z-index: 200;
         }
+
+        /* --- CONTROLLI TOUCH (visibili solo su mobile) --- */
+        .touch-ctrl { display: none; }
+        body.is-mobile .touch-ctrl { display: block; }
+
+        .joystick-base {
+            position: absolute; bottom: 30px;
+            width: 130px; height: 130px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(241, 196, 15, 0.6);
+            border-radius: 50%;
+            z-index: 300; touch-action: none;
+            display: none;
+        }
+        body.is-mobile .joystick-base { display: block; }
+
+        #joystick-left  { left: 30px; }
+
+        /* Area di drag per ruotare la camera: meta' destra dello schermo */
+        #look-area {
+            position: absolute;
+            top: 0; right: 0;
+            width: 50%; height: 100%;
+            z-index: 250;
+            display: none;
+            touch-action: none;
+        }
+        body.is-mobile #look-area { display: block; }
+
+        .joystick-knob {
+            position: absolute; top: 50%; left: 50%;
+            width: 55px; height: 55px;
+            background: rgba(241, 196, 15, 0.7);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        #punch-btn {
+            position: absolute; bottom: 50px; right: 50px;
+            width: 90px; height: 90px;
+            background: rgba(231, 76, 60, 0.85);
+            border: 3px solid #fff;
+            border-radius: 50%;
+            color: white; font-weight: 900; font-size: 1rem;
+            display: none; z-index: 350;
+            touch-action: none; user-select: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        body.is-mobile #punch-btn { display: block; }
+        #punch-btn:active { background: rgba(231, 76, 60, 1); transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -106,6 +157,13 @@
     </div>
 
     <div id="crosshair"></div>
+
+    <!-- CONTROLLI TOUCH (mostrati solo se body.is-mobile) -->
+    <div id="joystick-left" class="joystick-base touch-ctrl">
+        <div class="joystick-knob" id="knob-left"></div>
+    </div>
+    <div id="look-area" class="touch-ctrl"></div>
+    <button id="punch-btn" class="touch-ctrl">PUGNO</button>
 
     <script type="importmap">
         {
@@ -441,13 +499,113 @@
             document.getElementById('room-display').innerText = title.toUpperCase();
             health = 100;
             gameStarted = true;
-            renderer.domElement.requestPointerLock();
+            if (!isMobile) renderer.domElement.requestPointerLock();
         }
 
         // --- INPUT ---
         const keys = {};
         window.addEventListener('keydown', e => keys[e.code] = true);
         window.addEventListener('keyup',   e => keys[e.code] = false);
+
+        // --- RILEVAMENTO MOBILE ---
+        const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 800;
+        if (isMobile) document.body.classList.add('is-mobile');
+
+        // --- INPUT TOUCH ---
+        // Joystick sinistro: vettore [-1..1] per ciascun asse, muove il giocatore
+        const joyMove = { x: 0, y: 0 };
+        // Look: delta per frame (consumato e azzerato dopo ogni applicazione)
+        const lookDelta = { x: 0, y: 0 };
+
+        function setupJoystick(baseId, knobId, target) {
+            const base = document.getElementById(baseId);
+            const knob = document.getElementById(knobId);
+            if (!base) return;
+
+            const RADIUS = 55;
+            let activeTouchId = null;
+            let centerX = 0, centerY = 0;
+
+            base.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (activeTouchId !== null) return;
+                const t = e.changedTouches[0];
+                activeTouchId = t.identifier;
+                const rect = base.getBoundingClientRect();
+                centerX = rect.left + rect.width / 2;
+                centerY = rect.top + rect.height / 2;
+            }, { passive: false });
+
+            base.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (const t of e.changedTouches) {
+                    if (t.identifier !== activeTouchId) continue;
+                    let dx = t.clientX - centerX;
+                    let dy = t.clientY - centerY;
+                    const len = Math.hypot(dx, dy);
+                    if (len > RADIUS) { dx = dx / len * RADIUS; dy = dy / len * RADIUS; }
+                    knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                    target.x = dx / RADIUS;
+                    target.y = dy / RADIUS;
+                }
+            }, { passive: false });
+
+            const endTouch = (e) => {
+                for (const t of e.changedTouches) {
+                    if (t.identifier !== activeTouchId) continue;
+                    activeTouchId = null;
+                    knob.style.transform = `translate(-50%, -50%)`;
+                    target.x = 0;
+                    target.y = 0;
+                }
+            };
+            base.addEventListener('touchend', endTouch);
+            base.addEventListener('touchcancel', endTouch);
+        }
+        setupJoystick('joystick-left', 'knob-left', joyMove);
+
+        // Look area: trascina per ruotare la camera
+        // Tracciamo l'ultima posizione del dito; ad ogni movimento accumuliamo il delta in lookDelta.
+        const lookArea = document.getElementById('look-area');
+        if (lookArea) {
+            const lookTouches = {}; // id -> { x, y }
+
+            lookArea.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                for (const t of e.changedTouches) {
+                    lookTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+                }
+            }, { passive: false });
+
+            lookArea.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (const t of e.changedTouches) {
+                    const prev = lookTouches[t.identifier];
+                    if (!prev) continue;
+                    lookDelta.x += t.clientX - prev.x;
+                    lookDelta.y += t.clientY - prev.y;
+                    prev.x = t.clientX;
+                    prev.y = t.clientY;
+                }
+            }, { passive: false });
+
+            const endLook = (e) => {
+                for (const t of e.changedTouches) {
+                    delete lookTouches[t.identifier];
+                }
+            };
+            lookArea.addEventListener('touchend', endLook);
+            lookArea.addEventListener('touchcancel', endLook);
+        }
+
+        // Bottone PUGNO touch
+        const punchBtn = document.getElementById('punch-btn');
+        if (punchBtn) {
+            punchBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (gameStarted) punch();
+            }, { passive: false });
+        }
 
         document.addEventListener('mousemove', e => {
             if (document.pointerLockElement === renderer.domElement) {
@@ -457,14 +615,13 @@
             }
         });
 
-        // Pugno: solo IN-GAME e con pointer lock attivo (evita click dei menu)
+        // Pugno (desktop): solo IN-GAME e con pointer lock attivo (evita click dei menu).
         // Se siamo in gioco ma il lock e' stato rilasciato (ESC, alt-tab, ecc), il click lo riacquisisce.
         renderer.domElement.addEventListener('mousedown', () => {
-            if (!gameStarted) return;
+            if (!gameStarted || isMobile) return;
             if (document.pointerLockElement === renderer.domElement) {
                 punch();
             } else {
-                // Riacquisisce il lock; il primo click NON conta come pugno
                 try {
                     renderer.domElement.requestPointerLock();
                 } catch (e) {
@@ -543,10 +700,30 @@
                 const speed = 0.12;
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(playerGroup.quaternion);
                 const side    = new THREE.Vector3(1, 0, 0).applyQuaternion(playerGroup.quaternion);
-                if (keys['KeyW']) playerGroup.position.addScaledVector(forward, speed);
-                if (keys['KeyS']) playerGroup.position.addScaledVector(forward, -speed);
-                if (keys['KeyA']) playerGroup.position.addScaledVector(side, -speed);
-                if (keys['KeyD']) playerGroup.position.addScaledVector(side, speed);
+
+                // Movimento: tastiera (desktop) + joystick sinistro (mobile)
+                let mx = 0, mz = 0;
+                if (keys['KeyW']) mz += 1;
+                if (keys['KeyS']) mz -= 1;
+                if (keys['KeyA']) mx -= 1;
+                if (keys['KeyD']) mx += 1;
+                if (isMobile) {
+                    mx += joyMove.x;
+                    mz -= joyMove.y; // y del joystick e' invertita: alto = avanti
+                }
+                playerGroup.position.addScaledVector(forward, mz * speed);
+                playerGroup.position.addScaledVector(side,    mx * speed);
+
+                // Rotazione camera: drag sulla meta' destra (mobile)
+                if (isMobile) {
+                    const lookSensitivity = 0.004;
+                    playerGroup.rotation.y -= lookDelta.x * lookSensitivity;
+                    camera.rotation.x -= lookDelta.y * lookSensitivity;
+                    camera.rotation.x = Math.max(-1.4, Math.min(1.4, camera.rotation.x));
+                    // Consuma il delta: e' gia' stato applicato
+                    lookDelta.x = 0;
+                    lookDelta.y = 0;
+                }
 
                 playerGroup.position.x = Math.max(-48, Math.min(48, playerGroup.position.x));
                 playerGroup.position.z = Math.max(-48, Math.min(48, playerGroup.position.z));
