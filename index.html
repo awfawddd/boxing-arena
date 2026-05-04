@@ -56,6 +56,31 @@
         .health-bar-bg { width: 180px; height: 12px; background: #333; border-radius: 6px; margin-top: 5px; overflow: hidden; }
         #health-fill { width: 100%; height: 100%; background: #2ecc71; transition: 0.3s; }
 
+        #scoreboard {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0,0,0,0.7); padding: 12px 18px; border-radius: 15px;
+            color: white; z-index: 100; display: none; pointer-events: none;
+            border-right: 5px solid #f1c40f; min-width: 200px;
+            font-size: 0.95rem;
+        }
+        #scoreboard h4 { margin: 0 0 6px 0; color: #f1c40f; font-size: 0.9rem; letter-spacing: 1px; }
+        #round-info { font-size: 0.85rem; opacity: 0.85; margin-bottom: 6px; }
+        #ko-list .ko-row { display: flex; justify-content: space-between; padding: 2px 0; }
+        #ko-list .ko-row.me { color: #f1c40f; font-weight: bold; }
+
+        #round-end-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); color: white;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 600; text-align: center;
+        }
+        #round-end-overlay h1 { color: #f1c40f; margin-bottom: 20px; }
+        #round-end-overlay .standings {
+            background: rgba(255,255,255,0.05); padding: 15px 30px; border-radius: 10px;
+            min-width: 280px; margin-bottom: 20px;
+        }
+        #round-end-overlay .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
         #crosshair {
             position: absolute; top: 50%; left: 50%; width: 10px; height: 10px;
             border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%);
@@ -136,6 +161,26 @@
         <button class="btn" style="width:100px; padding:5px; font-size:0.7rem; margin-top:10px; pointer-events:auto;" onclick="location.reload()">ESCI</button>
     </div>
 
+    <div id="scoreboard">
+        <h4>CLASSIFICA</h4>
+        <div id="round-info"></div>
+        <div id="ko-list"></div>
+    </div>
+
+    <div id="round-end-overlay">
+        <h1 id="round-end-title">FINE PARTITA</h1>
+        <div class="standings" id="round-end-standings"></div>
+        <button class="btn" onclick="location.reload()">TORNA AL MENU</button>
+    </div>
+
+    <div id="round-break-overlay" style="position:absolute; top:0; left:0; width:100%; height:100%;
+         background:rgba(0,0,0,0.85); color:white; display:none; flex-direction:column;
+         justify-content:center; align-items:center; z-index:550; text-align:center;">
+        <h1 id="round-break-title" style="color:#f1c40f;">FINE ROUND</h1>
+        <div class="standings" id="round-break-standings" style="background:rgba(255,255,255,0.05); padding:15px 30px; border-radius:10px; min-width:280px; margin-bottom:20px;"></div>
+        <div id="round-break-countdown" style="font-size:2rem; color:#f1c40f; font-weight:bold;">5</div>
+    </div>
+
     <div id="main-menu">
         <h1 class="menu-title">Boxing Arena</h1>
         <button class="btn" onclick="startSingle()">Allenamento (BOT)</button>
@@ -152,6 +197,29 @@
     <div id="room-settings">
         <h2 class="menu-title">Configura Arena</h2>
         <input type="text" id="room-name-input" placeholder="Nome dell'arena..." style="padding:15px; width:250px; border-radius:10px; border:none; margin-bottom:15px;">
+
+        <div style="margin-bottom: 10px;">
+            <label style="margin-right: 15px;">
+                <input type="radio" name="room-type" value="free" checked onclick="toggleRoundOptions()"> Libera (no round)
+            </label>
+            <label>
+                <input type="radio" name="room-type" value="round" onclick="toggleRoundOptions()"> A round
+            </label>
+        </div>
+
+        <div id="round-options" style="display:none; background:rgba(0,0,0,0.4); padding:12px; border-radius:10px; margin-bottom:15px;">
+            <div style="margin-bottom: 8px;">
+                Numero round:
+                <input type="number" id="round-count-input" value="3" min="1" max="10"
+                       style="width:50px; padding:4px; border-radius:5px; border:none; margin-left:5px;">
+            </div>
+            <div>
+                Durata round (min):
+                <input type="number" id="round-duration-input" value="3" min="1" max="15"
+                       style="width:50px; padding:4px; border-radius:5px; border:none; margin-left:5px;">
+            </div>
+        </div>
+
         <button class="btn" onclick="createNewRoom()">Crea ed Entra</button>
         <button class="btn" style="border-color:#e74c3c" onclick="showMenu('multiplayer-menu')">Annulla</button>
     </div>
@@ -180,7 +248,7 @@
         import * as THREE from 'three';
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 
         // =====================================================================
         //  FIREBASE CONFIG — INCOLLA QUI il config del TUO progetto Firebase.
@@ -214,8 +282,9 @@
         let currentUser = null;
         let currentRoomId = null;
         let remotePlayers = {};   // id -> THREE.Group
-        let remoteState = {};     // id -> { health, lastSeen }
+        let remoteState = {};     // id -> { health, kos, nick, lastSeen }
         let gameMode = 'single';
+        let myNick = "Boxer" + Math.floor(Math.random() * 1000);
 
         // Riferimenti per cleanup
         let positionInterval = null;
@@ -226,6 +295,11 @@
         let gameStarted = false;
         let health = 100;
         let isPunching = false;
+        let isRespawning = false;
+        let myKOs = 0;                 // KO che ho fatto io in questa partita
+        let roomMeta = null;           // { type: 'free'|'round', rounds, durationMs, currentRound, roundEndsAt, status }
+        let unsubRoom = null;          // listener sui dati della stanza (per round/timer)
+        let roundEndShown = false;     // evita di mostrare "fine round" piu' volte
         let bot = { mesh: null, health: 100, alive: false, lastAttack: 0 };
 
         // --- SCENA E CAMERA ---
@@ -325,6 +399,11 @@
             });
         };
 
+        window.toggleRoundOptions = () => {
+            const isRound = document.querySelector('input[name="room-type"]:checked').value === 'round';
+            document.getElementById('round-options').style.display = isRound ? 'block' : 'none';
+        };
+
         window.openMultiplayer = () => {
             if (!configOk) {
                 alert("Multiplayer non disponibile: Firebase non e' configurato.");
@@ -344,21 +423,60 @@
 
         function loadRooms() {
             if (unsubRooms) unsubRooms();
-            unsubRooms = onSnapshot(roomsCol(), (snap) => {
+            unsubRooms = onSnapshot(roomsCol(), async (snap) => {
                 const list = document.getElementById('room-list');
+
+                // Pulizia: per ogni stanza, controlla se ha giocatori vivi.
+                // Uso Promise.all in parallelo per non rallentare la UI.
+                const roomsWithStatus = await Promise.all(snap.docs.map(async (d) => {
+                    try {
+                        const playersSnap = await getDocs(playersCol(d.id));
+                        const now = Date.now();
+                        let aliveCount = 0;
+                        playersSnap.forEach(p => {
+                            const data = p.data();
+                            if (data.lastSeen && (now - data.lastSeen) <= GHOST_TIMEOUT_MS) aliveCount++;
+                        });
+                        return { id: d.id, data: d.data(), alive: aliveCount, totalPlayers: playersSnap.size };
+                    } catch {
+                        return { id: d.id, data: d.data(), alive: -1, totalPlayers: -1 };
+                    }
+                }));
+
+                // Cancella in background le stanze fantasma (no giocatori vivi)
+                // Solo se la stanza esiste da almeno 30 secondi (evita di cancellare stanze appena create).
+                roomsWithStatus.forEach(r => {
+                    const createdAt = r.data.createdAt?.toMillis?.() || 0;
+                    const ageMs = Date.now() - createdAt;
+                    if (r.alive === 0 && ageMs > 30000) {
+                        cleanupRoomIfEmpty(r.id);
+                    }
+                });
+
+                // Mostra solo le stanze con giocatori vivi (o appena create, < 30s di vita)
+                const visible = roomsWithStatus.filter(r => {
+                    const createdAt = r.data.createdAt?.toMillis?.() || 0;
+                    const ageMs = Date.now() - createdAt;
+                    return r.alive > 0 || ageMs < 30000;
+                });
+
                 list.innerHTML = '';
-                if (snap.empty) {
+                if (visible.length === 0) {
                     list.innerHTML = '<div style="opacity:0.5; text-align:center;">Nessuna arena attiva</div>';
                     return;
                 }
-                snap.forEach(d => {
-                    const room = d.data();
+                visible.forEach(r => {
+                    const room = r.data;
                     const item = document.createElement('div');
                     item.className = 'room-item';
                     const safeName = String(room.name || 'Arena').replace(/[<>"']/g, '');
-                    item.innerHTML = `<span>${safeName}</span>
+                    const badge = room.type === 'round'
+                        ? `<span style="font-size:0.7rem; background:#f1c40f; color:#000; padding:2px 6px; border-radius:4px; margin-left:6px;">ROUND</span>`
+                        : `<span style="font-size:0.7rem; background:#666; color:#fff; padding:2px 6px; border-radius:4px; margin-left:6px;">LIBERA</span>`;
+                    const playersBadge = `<span style="font-size:0.7rem; opacity:0.7; margin-left:6px;">${r.alive}/?</span>`;
+                    item.innerHTML = `<span>${safeName}${badge}${playersBadge}</span>
                         <button class="btn" style="width:80px; padding:5px; margin:0; font-size:0.8rem;"
-                                onclick="joinRoom('${d.id}', '${safeName.replace(/'/g, '')}')">ENTRA</button>`;
+                                onclick="joinRoom('${r.id}', '${safeName.replace(/'/g, '')}')">ENTRA</button>`;
                     list.appendChild(item);
                 });
             }, (err) => console.error("Errore sincronizzazione stanze", err));
@@ -367,13 +485,28 @@
         window.createNewRoom = async () => {
             if (!currentUser) return;
             const name = document.getElementById('room-name-input').value.trim() || "Arena PvP";
+            const type = document.querySelector('input[name="room-type"]:checked').value;
             const roomId = crypto.randomUUID();
+
+            const data = {
+                name,
+                type,
+                createdAt: serverTimestamp(),
+                creatorId: currentUser.uid
+            };
+
+            if (type === 'round') {
+                const rounds = Math.max(1, Math.min(10, parseInt(document.getElementById('round-count-input').value) || 3));
+                const minutes = Math.max(1, Math.min(15, parseInt(document.getElementById('round-duration-input').value) || 3));
+                data.rounds = rounds;
+                data.durationMs = minutes * 60 * 1000;
+                data.currentRound = 1;
+                data.roundEndsAt = Date.now() + data.durationMs;
+                data.status = 'playing'; // playing | ended
+            }
+
             try {
-                await setDoc(roomDoc(roomId), {
-                    name,
-                    createdAt: serverTimestamp(),
-                    creatorId: currentUser.uid
-                });
+                await setDoc(roomDoc(roomId), data);
                 joinRoom(roomId, name);
             } catch (e) {
                 console.error("Errore creazione stanza", e);
@@ -394,7 +527,18 @@
 
             const me = playerDoc(currentRoomId, currentUser.uid);
 
-            // Scrittura periodica della mia posizione (10 Hz)
+            // Listener sui dati della stanza (per tipo, round, timer)
+            unsubRoom = onSnapshot(roomDoc(currentRoomId), (snap) => {
+                if (!snap.exists()) return;
+                roomMeta = snap.data();
+                // Se la partita e' finita, mostra la classifica finale
+                if (roomMeta.status === 'ended' && !roundEndShown) {
+                    roundEndShown = true;
+                    showFinalStandings();
+                }
+            }, (err) => console.error("Errore lettura stanza", err));
+
+            // Scrittura periodica della mia posizione + KO (10 Hz)
             positionInterval = setInterval(async () => {
                 if (!gameStarted) return;
                 try {
@@ -402,6 +546,8 @@
                         pos: { x: playerGroup.position.x, y: playerGroup.position.y, z: playerGroup.position.z },
                         rot: playerGroup.rotation.y,
                         health,
+                        kos: myKOs,
+                        nick: myNick,
                         lastSeen: Date.now(),
                         uid: currentUser.uid
                     }, { merge: true });
@@ -418,9 +564,9 @@
                     const data = d.data();
                     if (d.id === currentUser.uid) {
                         // Il server puo' aver abbassato la mia salute (mi ha colpito un altro)
-                        if (typeof data.health === 'number' && data.health < health) {
+                        if (typeof data.health === 'number' && data.health < health && !isRespawning) {
                             health = data.health;
-                            if (health <= 0) gameOver("Sei stato sconfitto!");
+                            if (health <= 0) handleDeath();
                         }
                         return;
                     }
@@ -443,7 +589,12 @@
                     if (typeof data.rot === 'number') {
                         remotePlayers[d.id].rotation.y = data.rot;
                     }
-                    remoteState[d.id] = { health: data.health ?? 100, lastSeen: data.lastSeen };
+                    remoteState[d.id] = {
+                        health: data.health ?? 100,
+                        kos: data.kos ?? 0,
+                        nick: data.nick || "Player",
+                        lastSeen: data.lastSeen
+                    };
                     remotePlayers[d.id].visible = (data.health ?? 100) > 0;
                 });
                 // Rimuovi giocatori non piu' presenti nello snapshot
@@ -466,12 +617,53 @@
                 unsubPlayers();
                 unsubPlayers = null;
             }
+            if (unsubRoom) {
+                unsubRoom();
+                unsubRoom = null;
+            }
+        }
+
+        // GHOST_TIMEOUT_MS: dopo quanto un giocatore senza heartbeat e' considerato morto/scomparso
+        const GHOST_TIMEOUT_MS = 10000;
+
+        // Pulisce una stanza se non ha piu' giocatori vivi.
+        // Strategia: rimuove i player ghost (lastSeen vecchio), poi se la collezione e' vuota cancella la stanza.
+        async function cleanupRoomIfEmpty(roomId) {
+            try {
+                const playersSnap = await getDocs(playersCol(roomId));
+                const now = Date.now();
+                let aliveCount = 0;
+                const ghostDeletes = [];
+                playersSnap.forEach(p => {
+                    const data = p.data();
+                    const isGhost = !data.lastSeen || (now - data.lastSeen) > GHOST_TIMEOUT_MS;
+                    if (isGhost) {
+                        ghostDeletes.push(deleteDoc(playerDoc(roomId, p.id)));
+                    } else {
+                        aliveCount++;
+                    }
+                });
+                await Promise.all(ghostDeletes);
+                if (aliveCount === 0) {
+                    await deleteDoc(roomDoc(roomId));
+                    return true;
+                }
+            } catch (e) {
+                console.warn("Cleanup stanza fallito:", e.message);
+            }
+            return false;
         }
 
         // Quando l'utente chiude/ricarica, rimuove il proprio doc giocatore
+        // e prova a pulire la stanza se rimane vuota.
+        // NB: beforeunload non garantisce che le promesse async finiscano. Le scritture Firestore
+        // mettono in coda comunque, quindi spesso arrivano. Se non arrivano, il cleanup periodico
+        // della lobby le pulira'.
         window.addEventListener('beforeunload', () => {
             if (currentUser && currentRoomId) {
                 try { deleteDoc(playerDoc(currentRoomId, currentUser.uid)); } catch {}
+                // Tentativo "best effort" di cleanup stanza
+                try { cleanupRoomIfEmpty(currentRoomId); } catch {}
             }
             stopNetworkSync();
         });
@@ -664,11 +856,16 @@
                 for (const id of Object.keys(remotePlayers)) {
                     const hits = ray.intersectObject(remotePlayers[id], true);
                     if (hits.length > 0 && hits[0].distance < 2.5) {
-                        const targetHealth = (remoteState[id]?.health ?? 100) - 15;
+                        const prevHealth = remoteState[id]?.health ?? 100;
+                        if (prevHealth <= 0) break; // gia' a terra, niente colpo
+                        const newHealth = Math.max(0, prevHealth - 15);
                         try {
-                            await updateDoc(playerDoc(currentRoomId, id), {
-                                health: Math.max(0, targetHealth)
-                            });
+                            await updateDoc(playerDoc(currentRoomId, id), { health: newHealth });
+                            // Se questo colpo lo manda KO, conto un punto per me
+                            if (prevHealth > 0 && newHealth === 0) {
+                                myKOs++;
+                                showMessage("KO! +1", 1200);
+                            }
                         } catch (e) {
                             console.error("Errore colpo PvP", e);
                         }
@@ -676,6 +873,30 @@
                     }
                 }
             }
+        }
+
+        function handleDeath() {
+            if (gameMode === 'single') {
+                gameOver("BOT ti ha messo KO!");
+                return;
+            }
+            // Multiplayer: respawn dopo 3 secondi
+            isRespawning = true;
+            const reEntry = (countdown) => {
+                if (countdown > 0) {
+                    showMessage(`KO! Respawn in ${countdown}...`, 1100);
+                    setTimeout(() => reEntry(countdown - 1), 1000);
+                } else {
+                    // Respawn: HP pieni, posizione casuale dentro al ring
+                    health = 100;
+                    const rx = (Math.random() - 0.5) * 8;
+                    const rz = (Math.random() - 0.5) * 8;
+                    playerGroup.position.set(rx, 1.7, rz);
+                    isRespawning = false;
+                    showMessage("Sei tornato!", 1500);
+                }
+            };
+            reEntry(3);
         }
 
         function gameOver(msg) {
@@ -686,17 +907,20 @@
             location.reload();
         }
 
-        function showMessage(txt) {
+        function showMessage(txt, ms = 1500) {
             const m = document.getElementById('game-msg');
             m.innerText = txt;
             m.style.display = 'block';
-            setTimeout(() => m.style.display = 'none', 1500);
+            clearTimeout(m._hideTimer);
+            m._hideTimer = setTimeout(() => m.style.display = 'none', ms);
         }
 
         // --- LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-            if (gameStarted && health > 0) {
+            const inBreak = isInBreak();
+            updateBreakOverlay(inBreak);
+            if (gameStarted && health > 0 && !isRespawning && !inBreak) {
                 const speed = 0.12;
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(playerGroup.quaternion);
                 const side    = new THREE.Vector3(1, 0, 0).applyQuaternion(playerGroup.quaternion);
@@ -741,8 +965,127 @@
                     }
                 }
                 document.getElementById('health-fill').style.width = health + "%";
+                updateScoreboard();
+                checkRoundTimer();
             }
             renderer.render(scene, camera);
+        }
+
+        function updateScoreboard() {
+            if (gameMode !== 'multi') return;
+            const sb = document.getElementById('scoreboard');
+            sb.style.display = 'block';
+
+            // Info round
+            const info = document.getElementById('round-info');
+            if (roomMeta && roomMeta.type === 'round') {
+                const remaining = Math.max(0, (roomMeta.roundEndsAt || 0) - Date.now());
+                const m = Math.floor(remaining / 60000);
+                const s = Math.floor((remaining % 60000) / 1000);
+                info.innerText = `Round ${roomMeta.currentRound}/${roomMeta.rounds} - ${m}:${s.toString().padStart(2,'0')}`;
+            } else {
+                info.innerText = "Modalita' libera";
+            }
+
+            // Lista KO (me + altri)
+            const list = document.getElementById('ko-list');
+            const rows = [{ id: currentUser?.uid, nick: myNick + " (tu)", kos: myKOs, me: true }];
+            for (const id of Object.keys(remoteState)) {
+                rows.push({ id, nick: remoteState[id].nick || "Player", kos: remoteState[id].kos || 0, me: false });
+            }
+            rows.sort((a, b) => b.kos - a.kos);
+            list.innerHTML = rows.map(r =>
+                `<div class="ko-row${r.me ? ' me' : ''}"><span>${r.nick}</span><span>${r.kos} KO</span></div>`
+            ).join('');
+        }
+
+        function isInBreak() {
+            if (!roomMeta || roomMeta.type !== 'round') return false;
+            if (roomMeta.status !== 'playing') return false;
+            return roomMeta.breakUntil && Date.now() < roomMeta.breakUntil;
+        }
+
+        function updateBreakOverlay(inBreak) {
+            const overlay = document.getElementById('round-break-overlay');
+            if (!inBreak) {
+                if (overlay.style.display !== 'none') {
+                    overlay.style.display = 'none';
+                    // Quando la pausa finisce: respawn HP pieni e posizione casuale
+                    if (gameMode === 'multi' && gameStarted) {
+                        health = 100;
+                        const rx = (Math.random() - 0.5) * 8;
+                        const rz = (Math.random() - 0.5) * 8;
+                        playerGroup.position.set(rx, 1.7, rz);
+                    }
+                }
+                return;
+            }
+            // Pausa attiva
+            overlay.style.display = 'flex';
+            const remaining = Math.max(0, Math.ceil((roomMeta.breakUntil - Date.now()) / 1000));
+            document.getElementById('round-break-countdown').innerText = remaining;
+            document.getElementById('round-break-title').innerText =
+                `Round ${roomMeta.currentRound - 1} finito - prossimo: ${roomMeta.currentRound}/${roomMeta.rounds}`;
+
+            // Classifica intermedia
+            const rows = [{ nick: myNick + " (tu)", kos: myKOs, me: true }];
+            for (const id of Object.keys(remoteState)) {
+                rows.push({ nick: remoteState[id].nick || "Player", kos: remoteState[id].kos || 0, me: false });
+            }
+            rows.sort((a, b) => b.kos - a.kos);
+            document.getElementById('round-break-standings').innerHTML = rows.map((r, i) =>
+                `<div class="row" style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.1); ${r.me ? 'color:#f1c40f; font-weight:bold;' : ''}">
+                    <span>${i+1}. ${r.nick}</span><span>${r.kos} KO</span>
+                </div>`
+            ).join('');
+        }
+
+        // Solo il creatore della stanza fa avanzare il round (evita race condition con piu' client che scrivono)
+        async function checkRoundTimer() {
+            if (!roomMeta || roomMeta.type !== 'round' || roomMeta.status === 'ended') return;
+            if (roomMeta.creatorId !== currentUser?.uid) return; // solo l'host gestisce
+            if (Date.now() < roomMeta.roundEndsAt) return;
+
+            // Timer scaduto: prossimo round o fine partita
+            try {
+                if (roomMeta.currentRound >= roomMeta.rounds) {
+                    await updateDoc(roomDoc(currentRoomId), { status: 'ended' });
+                } else {
+                    // 5 secondi di pausa, poi parte il prossimo round
+                    const breakMs = 5000;
+                    await updateDoc(roomDoc(currentRoomId), {
+                        currentRound: roomMeta.currentRound + 1,
+                        breakUntil: Date.now() + breakMs,
+                        roundEndsAt: Date.now() + breakMs + roomMeta.durationMs,
+                        status: 'playing'
+                    });
+                }
+            } catch (e) {
+                console.error("Errore avanzamento round", e);
+            }
+        }
+
+        function showFinalStandings() {
+            gameStarted = false;
+            try { document.exitPointerLock(); } catch {}
+            const overlay = document.getElementById('round-end-overlay');
+            const standings = document.getElementById('round-end-standings');
+
+            const rows = [{ nick: myNick + " (tu)", kos: myKOs, me: true }];
+            for (const id of Object.keys(remoteState)) {
+                rows.push({ nick: remoteState[id].nick || "Player", kos: remoteState[id].kos || 0, me: false });
+            }
+            rows.sort((a, b) => b.kos - a.kos);
+            const winner = rows[0];
+            const iWon = winner.me;
+
+            document.getElementById('round-end-title').innerText = iWon ? "VITTORIA!" : "PARTITA FINITA";
+            standings.innerHTML = rows.map((r, i) =>
+                `<div class="row" style="${r.me ? 'color:#f1c40f; font-weight:bold;' : ''}">
+                    <span>${i+1}. ${r.nick}</span><span>${r.kos} KO</span>
+                </div>`
+            ).join('');
+            overlay.style.display = 'flex';
         }
 
         initAuth();
